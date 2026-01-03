@@ -4,6 +4,7 @@ export default defineConfig({
   title: 'NoC 知識庫',
   description: 'Network on Chip 知識庫 - 基於《On-Chip Networks Second Edition》',
   lang: 'zh-TW',
+  base: '/noc-knowledge-base/',
 
   head: [
     ['link', { rel: 'icon', href: '/favicon.ico' }],
