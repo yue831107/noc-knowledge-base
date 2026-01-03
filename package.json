@@ -1,0 +1,22 @@
+{
+  "name": "noc-knowledge-base",
+  "version": "1.0.0",
+  "description": "NoC (Network on Chip) Knowledge Base",
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev docs",
+    "build": "vitepress build docs",
+    "preview": "vitepress preview docs"
+  },
+  "keywords": [
+    "noc",
+    "network-on-chip",
+    "knowledge-base"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "markdown-it-mathjax3": "^4.3.2",
+    "vitepress": "^1.6.4"
+  }
+}
