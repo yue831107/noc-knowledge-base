@@ -48,6 +48,10 @@ VC Flow Control 通常與 Wormhole 結合使用：
 
 ### VC 解決方案
 
+**動畫示意：** Virtual Channel 如何解決 HOL Blocking - 被阻擋的封包使用一個 VC，其他封包可使用不同 VC 繼續前進。
+
+![Virtual Channel 動畫](/images/ch05/gif/5.gif)
+
 以 Figure 5.6 為例：
 
 - **Packet A**（淺灰色）使用 VC 0，目的地是 East

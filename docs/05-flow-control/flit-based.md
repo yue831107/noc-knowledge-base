@@ -12,6 +12,10 @@ Packet 像蟲一樣穿過網路：Head 在前方探索路徑，Body 和 Tail 跟
 
 ![Figure 5.5: Wormhole Flow Control 範例](/images/ch05/Figure%205.5.jpg)
 
+**動畫示意：** Wormhole 的優勢與限制 - 低延遲、低 Buffer 需求，但會遭受 Head-of-line Blocking。
+
+![Wormhole Flow Control 動畫](/images/ch05/gif/3.gif)
+
 ## 運作方式
 
 以 Figure 5.5 為例，一個 5-Flit Packet 從 Core 0 發送到 Core 2：
@@ -88,6 +92,10 @@ Wormhole 的主要優勢是 **Buffer 需求極低**：
 **Head-of-line (HOL) Blocking** 是 Wormhole 最主要的問題：
 
 ### 問題描述
+
+**動畫示意：** 在 Mesh 網路中，當一個封包（紫色）被阻擋時，另一個封包（藍色）即使要去不同方向也無法前進。
+
+![Head-of-line Blocking 動畫](/images/ch05/gif/4.gif)
 
 當 Head Flit 被阻擋時：
 1. 整個 Packet 停止前進

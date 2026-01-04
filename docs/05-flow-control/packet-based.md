@@ -8,6 +8,10 @@ Packet-based Flow Control 以 **Packet** 為單位分配 Buffer 和 Link 資源�
 
 ![Figure 5.3: Store and Forward 範例](/images/ch05/Figure%205.3.jpg)
 
+**動畫示意：** 封包從 Source (S) 傳到 Destination (D)，整個封包必須先完整存入每個 Router 才能轉發到下一跳。
+
+![Store and Forward 動畫](/images/ch05/gif/1.gif)
+
 ### 運作流程
 
 以 Figure 5.3 為例，一個 5-Flit Packet 從 Core 0 發送到 Core 2：
@@ -51,6 +55,10 @@ Circuit Switching 的 Latency 被認為比 SAF 高，因為 Circuit Setup 的延
 **Virtual Cut-through** 允許 Head Flit 在整個 Packet 到達前就開始向下游轉發，前提是下游有足夠的 Buffer 空間。
 
 ![Figure 5.4: Virtual Cut-through 範例](/images/ch05/Figure%205.4.jpg)
+
+**動畫示意：** Head Flit 收到後立即開始轉發，不需等待整個封包到達，大幅降低延遲。
+
+![Cut-Through 動畫](/images/ch05/gif/2.gif)
 
 ### 運作流程
 
