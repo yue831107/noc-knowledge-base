@@ -33,6 +33,55 @@ Figure 8.11 展示了 TeraFLOPS 的 80 個 Tile 排列和 2D Mesh 網路。
 2. 探索 Manycore 架構
 3. 評估功耗和頻率擴展
 
+## 記憶體架構：Message Passing
+
+::: info 記憶體模型
+Intel TeraFLOPS 採用 **Message Passing** 架構，每個 Tile 擁有獨立的小型 SRAM（3KB 指令 + 2KB 資料），資料透過顯式訊息傳遞在 Tile 之間移動。這與傳統的 Shared Memory CMP 完全不同——**沒有 Cache，也沒有 Cache Coherence Protocol**。
+:::
+
+### 為何選擇 Message Passing
+
+| 考量 | 選擇 | 原因 |
+|------|------|------|
+| **目標應用** | 規則資料流（矩陣、FFT） | 通訊模式可預測 |
+| **設計簡化** | 極簡核心 | 不需要 Cache Controller |
+| **高頻率** | 簡單邏輯 | 達成 5+ GHz |
+| **功耗控制** | 無 Coherence 開銷 | 降低網路流量 |
+
+### 與 Shared Memory 的對比
+
+| 特性 | TeraFLOPS (Message Passing) | Shared Memory CMP |
+|------|----------------------------|-------------------|
+| **位址空間** | 分散式（每 Tile 獨立） | 全域共享 |
+| **Cache** | **無**（只有小型 SRAM） | 有，需要 Coherence |
+| **資料移動** | 顯式訊息傳遞 | 隱式（Load/Store） |
+| **程式設計** | 需要手動管理通訊 | 對程式設計師透明 |
+| **可程式性** | 低（專用應用） | 高（通用） |
+
+### 記憶體層次
+
+```
+┌─────────────────────────────────────────┐
+│              Off-chip DRAM              │  ← 外部記憶體（頻寬受限）
+└───────────────────┬─────────────────────┘
+                    ↓ 有限頻寬
+┌───────────────────┴─────────────────────┐
+│       80 Tiles via 2D Mesh Network      │
+│  ┌─────┐  ┌─────┐  ┌─────┐  ┌─────┐     │
+│  │Tile │──│Tile │──│Tile │──│Tile │ ... │
+│  │3KB I│  │3KB I│  │3KB I│  │3KB I│     │  ← 每 Tile 僅 5KB SRAM
+│  │2KB D│  │2KB D│  │2KB D│  │2KB D│     │
+│  └─────┘  └─────┘  └─────┘  └─────┘     │
+└─────────────────────────────────────────┘
+```
+
+::: warning 設計代價
+沒有 Cache 的 Message Passing 架構大幅簡化了硬體，但也帶來限制：
+- **程式設計複雜**：需要手動管理資料搬移
+- **僅適合特定應用**：規則資料流（矩陣運算、FFT）
+- **通用性差**：不適合一般程式
+:::
+
 ## Tile 架構
 
 ![Figure 8.12: TeraFLOPS Tile Architecture](/images/ch08/Figure%208.12.jpg)
@@ -139,23 +188,15 @@ Figure 8.12 展示了單個 Tile 的內部結構。
 | **Off-chip** | 頻寬不足 |
 | **瓶頸** | 記憶體綁定工作負載 |
 
-## 程式設計
-
-### Message Passing
-
-| 特點 | 說明 |
-|------|------|
-| **模型** | 明確訊息傳遞 |
-| **API** | 自訂低階 API |
-| **適合** | 規則資料流 |
+## 程式設計模型
 
 ### 典型應用
 
-| 應用 | 適合度 |
-|------|--------|
-| 矩陣運算 | 極佳 |
-| FFT | 佳 |
-| 通用程式 | 差 |
+| 應用 | 適合度 | 原因 |
+|------|--------|------|
+| 矩陣運算 | 極佳 | 規則資料流、可預測通訊 |
+| FFT | 佳 | 結構化通訊模式 |
+| 通用程式 | 差 | 不規則存取、需要 Cache |
 
 ## 後續影響
 
@@ -219,4 +260,3 @@ TeraFLOPS 的研究直接影響了：
 
 - On-Chip Networks Second Edition, Chapter 8.7
 - S. Vangal et al., "An 80-Tile Sub-100W TeraFLOPS Processor in 65nm CMOS," ISSCC 2007
-

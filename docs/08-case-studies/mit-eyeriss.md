@@ -18,6 +18,55 @@
 
 Figure 8.1 展示了 Eyeriss 的整體架構，包含 PE Array、Global Buffer 和多層網路。
 
+## 記憶體架構：Dataflow
+
+::: info 記憶體模型
+Eyeriss 採用 **Dataflow** 架構，這是深度學習加速器特有的記憶體模型。與傳統 CMP 的 Shared Memory 或 Message Passing 不同，Dataflow 架構的資料移動完全由**資料流動模式（Dataflow Pattern）**決定，而非由程式指令明確控制。
+:::
+
+### 為何 DNN 加速器不需要 Cache Coherence
+
+| 傳統 CMP | Eyeriss (DNN 加速器) |
+|----------|---------------------|
+| 多核共享資料、競爭存取 | 資料流動模式固定 |
+| 需要 Cache Coherence 確保一致性 | 資料重用由 Dataflow 精確控制 |
+| 程式控制資料移動 | 硬體根據 CNN 結構自動搬移 |
+
+### Dataflow 架構的特點
+
+| 特性 | 說明 |
+|------|------|
+| **固定資料路徑** | Filter、Input、Psum 的流動路徑在編譯時決定 |
+| **無 Cache** | PE 使用 Scratchpad（Register File）而非 Cache |
+| **Multicast 支援** | 同一資料可同時傳送到多個 PE |
+| **高資料重用** | Row-stationary Dataflow 最大化重用率 |
+
+### 記憶體層次
+
+```
+┌─────────────────────────────────────────┐
+│              Off-chip DRAM              │
+└─────────────────┬───────────────────────┘
+                  ↓
+┌─────────────────┴───────────────────────┐
+│         Global Buffer (108 KB)          │  ← 全域資料暫存
+│    (Filter / Input Feature Map 分發)    │
+└─────────────────┬───────────────────────┘
+                  ↓ Global Network (Multicast)
+┌─────────────────┴───────────────────────┐
+│    PE Array (168 PE, each with RF)      │  ← 每個 PE 有自己的 Register File
+│         Local Network (Psum 傳遞)        │
+└─────────────────────────────────────────┘
+```
+
+::: tip 與其他架構的比較
+| 架構 | Coherence | 資料管理 | 典型應用 |
+|------|-----------|----------|----------|
+| **Shared Memory** | 需要 | 硬體自動（透明 Cache） | 通用 CMP |
+| **Message Passing** | 不需要 | 軟體手動（DMA） | HPC、Cell |
+| **Dataflow** | **不需要** | **Dataflow 模式自動** | **DNN 加速器** |
+:::
+
 ## 網路架構
 
 Eyeriss 採用**階層式網路架構**（參見 [Hierarchical Topology](/03-topology/hierarchical)），針對 CNN 的資料重用模式進行優化。

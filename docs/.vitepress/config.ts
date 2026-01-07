@@ -17,7 +17,7 @@ export default defineConfig({
       { text: '首頁', link: '/' },
       { text: '快速入門', link: '/01-introduction/' },
       { text: '術語表', link: '/glossary' },
-      { text: '參考文獻', link: '/references' },
+      { text: '延伸閱讀', link: '/references/' },
     ],
 
     sidebar: {
@@ -138,11 +138,19 @@ export default defineConfig({
           ]
         },
         {
+          text: '延伸閱讀',
+          collapsed: true,
+          items: [
+            { text: '概覽', link: '/references/' },
+            { text: 'SoC Interconnect 演進史', link: '/references/soc-interconnect-history' },
+          ]
+        },
+        {
           text: '附錄',
           collapsed: true,
           items: [
             { text: '術語表', link: '/glossary' },
-            { text: '參考文獻', link: '/references' },
+            { text: '書籍參考文獻', link: '/references-book' },
             { text: '常用公式', link: '/appendix/formulas' },
             { text: '相關工具', link: '/appendix/tools' },
           ]

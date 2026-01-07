@@ -6,6 +6,42 @@
 
 我們將討論重點放在 Shared-Memory CMP 上，因為它們預計將成為未來幾年的主流 Multi-core 架構。與 SMP 類似，CMP 通常具有 Shared Global Address Space；然而與 SMP 不同，CMP 可能表現出非均勻記憶體存取延遲（NUMA）。
 
+## NUMA：非均勻記憶體存取
+
+::: info 什麼是 NUMA？
+**NUMA（Non-Uniform Memory Access）** 指的是在多處理器系統中，不同處理器存取不同記憶體區域所需的時間不同。這與 **UMA（Uniform Memory Access）** 形成對比，後者所有處理器存取任何記憶體位址的延遲都相同。
+:::
+
+### NUMA 的成因
+
+在使用 NoC 的 CMP 中，NUMA 特性自然產生，因為封包穿越網路的跳數（hop count）直接決定延遲：
+
+- **近端 Memory Controller**：少跳數 → 低延遲
+- **遠端 Memory Controller**：多跳數 → 高延遲
+
+### NUMA 對 NoC 設計的影響
+
+| 影響面向 | 說明 |
+|----------|------|
+| **延遲變異** | 不同 Core 到 Memory Controller 的延遲不同 |
+| **負載不平衡** | 靠近 MC 的 Core 可能承受更多流量 |
+| **軟體優化** | OS 需要 NUMA-aware 的記憶體分配策略 |
+| **NoC 設計** | 可能需要考慮 MC 放置位置以平衡延遲 |
+
+### NUMA vs UMA 比較
+
+| 特性 | UMA | NUMA |
+|------|-----|------|
+| **記憶體存取延遲** | 均勻 | 不均勻 |
+| **典型互連** | Bus、Crossbar | NoC、多層互連 |
+| **擴展性** | 有限（頻寬瓶頸） | 較佳 |
+| **程式設計複雜度** | 簡單 | 需要 NUMA-aware 優化 |
+| **典型應用** | 小型 SMP | 大型 CMP、多 Socket 伺服器 |
+
+::: warning NoC 與 NUMA
+使用 NoC 的 CMP 幾乎必然是 NUMA 架構，因為封包穿越網路的跳數直接決定延遲。這是設計 NoC 時必須考慮的重要因素。
+:::
+
 ## 為何選擇 Shared Memory
 
 Shared Memory 程式設計模型之所以受歡迎，有以下幾個原因：
@@ -48,16 +84,8 @@ Cache 被用來減少記憶體延遲並作為需要發送到互連網路的流�
 
 Cache 對網路流量有顯著的過濾效果：
 
-```
-典型的 Cache Miss Rate：
-┌─────────────────────────────────────────┐
-│ L1 Cache Hit Rate: ~95%                 │
-│ → 只有 5% 的存取需要查詢 L2             │
-├─────────────────────────────────────────┤
-│ L2 Cache Hit Rate: ~80%                 │
-│ → 只有 1% 的存取需要存取 Main Memory    │
-└─────────────────────────────────────────┘
-```
+- **L1 Cache Hit Rate: ~95%** → 只有 5% 的存取需要查詢 L2
+- **L2 Cache Hit Rate: ~80%** → 只有 1% 的存取需要存取 Main Memory
 
 這意味著 **NoC 只需要處理一小部分的記憶體存取**，但這些存取對效能至關重要。
 
@@ -73,14 +101,11 @@ Cache 被設計為對程式設計師透明。它們透過將頻繁存取的資�
 
 考慮以下場景：
 
-```
-初始狀態：Memory[A] = 0
-
-時間 1: Core 0 讀取 A → L1_0[A] = 0
-時間 2: Core 1 讀取 A → L1_1[A] = 0
-時間 3: Core 0 寫入 A = 1 → L1_0[A] = 1
-時間 4: Core 1 讀取 A → 應該得到 1，但 L1_1[A] 仍是 0！
-```
+1. 初始狀態：Memory[A] = 0
+2. Core 0 讀取 A → L1_0[A] = 0
+3. Core 1 讀取 A → L1_1[A] = 0
+4. Core 0 寫入 A = 1 → L1_0[A] = 1
+5. Core 1 讀取 A → 應該得到 1，但 L1_1[A] 仍是 0！
 
 **問題**：Core 1 讀到了過期的資料（Stale Data）
 
@@ -128,11 +153,11 @@ Cache Coherence Protocol 管理對共享資料的存取，使得：
 
 ## Cache Miss 處理流程
 
-### Private L2 Hit 案例
+### Private L2 Hit 案例（Local Hit）
 
 1. Core 發出 LD A
 2. L1 Cache Miss
-3. 查詢 Private L2 → Hit!
+3. 查詢 **本地** Private L2 → Hit!
 4. 資料返回 L1 和 Core
 
 **網路穿越次數：0**（本地完成）
@@ -154,18 +179,26 @@ Cache Coherence Protocol 管理對共享資料的存取，使得：
 
 > **圖 2.5 解說**：展示 Private L2 Cache 架構下，Cache Miss 時的資料流動。注意 L2 Hit 時完全不需要使用網路，而 L2 Miss 需要兩次網路穿越。
 
-### Shared L2 Hit 案例
+### Shared L2 Hit 案例（Remote Hit）
 
 1. Core 發出 LD A
 2. L1 Cache Miss
 3. 請求發送到 Network Interface
-4. 透過網路發送到 A 對應的 L2 Bank
+4. 透過網路發送到 A 對應的 **遠端** L2 Bank
 5. L2 Bank Hit!
 6. 資料發送到 Network Interface
 7. 透過網路返回給 Requestor
 8. 資料安裝到 L1，傳送給 Core
 
 **網路穿越次數：2**（去程 + 回程）
+
+::: tip Local vs Remote 存取
+在 Shared L2 架構中：
+- **Local L2 Slice Hit**：如果資料剛好在本地 L2 Slice，延遲較低
+- **Remote L2 Bank Hit**：資料在遠端 L2 Bank，需要完整的網路往返
+
+兩者都稱為「L2 Hit」，但延遲可能相差數倍。這是 Shared L2 設計需要考慮的重要因素。
+:::
 
 ### Shared L2 Miss 案例
 
@@ -215,19 +248,40 @@ Home Node 的職責：
 - 從 Off-chip Memory 或另一個 Socket 提供資料
 - 向其他 On-chip Node 發送 Intervention Message 以獲取資料和/或 Coherence 請求的權限
 
-### 位址映射
+### 位址到 Home Node 映射
 
-典型的位址到 Home Node 映射：
+位址映射的目標是將記憶體存取**均勻分散**到各個 Home Node，避免熱點。
+
+#### 具體範例：16 節點系統
+
+假設一個 16 節點系統，使用 64-bit 位址和 64-byte Cache Line：
+
+| 位元範圍 | 用途 | 說明 |
+|----------|------|------|
+| **[5:0]** | Block Offset | 64-byte Cache Line 內的偏移（6 bits） |
+| **[9:6]** | Home Node ID | 4 bits → 16 個可能的 Home Node |
+| **[47:10]** | Page Number | 實際的記憶體頁面位址 |
+
+#### 映射公式
 
 ```
-Address [63:0]
-        ├── [63:12] Page Number
-        │           ├── [63:N] Home Node ID
-        │           └── [N-1:12] Page Offset
-        └── [11:0]  Block Offset
+Home Node = (Address >> 6) & 0xF
 ```
 
-這種映射確保相鄰的 Cache Block 可能映射到不同的 Home Node，以達成負載平衡。
+#### 映射範例
+
+| 位址 | 計算 | Home Node |
+|------|------|-----------|
+| 0x0040 | (0x40 >> 6) & 0xF = 1 | Node 1 |
+| 0x0080 | (0x80 >> 6) & 0xF = 2 | Node 2 |
+| 0x00C0 | (0xC0 >> 6) & 0xF = 3 | Node 3 |
+| 0x0400 | (0x400 >> 6) & 0xF = 0 | Node 0 |
+
+::: tip 為何使用 Block Offset 之上的位元？
+使用緊鄰 Block Offset 的位元作為 Home Node ID，確保**相鄰的 Cache Block 映射到不同的 Home Node**。這避免了連續記憶體存取集中在單一 Node，實現負載平衡。
+
+例如：連續讀取位址 0x40, 0x80, 0xC0 會分別送到 Node 1, 2, 3，而非全部送到同一個 Node。
+:::
 
 ### Memory Controller 放置
 
@@ -236,15 +290,25 @@ Memory Controller 可以有兩種放置方式：
 **選項 A：與 Core 和 Cache 共置**
 - Memory Controller 與 Cache 共享 Injection/Ejection 頻寬
 - 需要仲裁策略
+- **適用**：較小規模的 CMP
 
 **選項 B：獨立 Node**
 - Memory Controller 擁有完整的 Injection/Ejection 頻寬
 - 流量更加隔離
 - 通常放置在晶片邊緣以接近 I/O Pad
+- **適用**：大規模 CMP，記憶體頻寬需求高
 
 ![Figure 2.7: Memory controllers](/images/ch02/Figure%202.7.jpg)
 
 > **圖 2.7 解說**：展示兩種 Memory Controller 放置方式。左側為共置方式，右側為獨立 Node 方式。獨立 Node 通常放置在晶片邊緣。
+
+#### 實際處理器範例
+
+| 處理器 | MC 放置 | 說明 |
+|--------|---------|------|
+| **Intel Xeon Phi** | 晶片邊緣獨立 | 多個 MC 分布在 Mesh 邊緣 |
+| **Tilera TILEPRO64** | 四角落 | 4 個 MC 在晶片四角 |
+| **AMD EPYC** | Chiplet 架構 | MC 在 I/O Die |
 
 ## 相關研究進展
 

@@ -30,6 +30,14 @@ NoC 並非獨立存在的元件，它必須與整個系統架構緊密配合。�
 | **GPU** | Streaming, Burst | 大（Memory Access） | 中 |
 | **MPSoC** | 多樣化 | 變化大 | 依應用而定 |
 
+::: tip CMP 的 Many-to-few 流量模式
+在 Shared Memory CMP 中，大部分流量都流向少數幾個 Memory Controller。例如在 64 核心系統中可能只有 4 個 MC，這意味著：
+- **去程流量**：64 個 Core → 4 個 MC（Many-to-few）
+- **回程流量**：4 個 MC → 64 個 Core（Few-to-many）
+
+這種不對稱的流量模式對 NoC 拓撲選擇和路由設計有重要影響。
+:::
+
 ### 一致性需求
 
 不同系統對 **Cache Coherence** 的需求不同：
@@ -62,7 +70,41 @@ NoC 並非獨立存在的元件，它必須與整個系統架構緊密配合。�
 - 硬體負責維護 **Cache Coherence**
 - 程式設計師不需要明確管理資料移動
 
-**Partitioned Global Address Space (PGAS)** 在現代 SMP 設計中很常見，其中較高位址位元選擇記憶體位址與哪個 Socket 關聯。
+### Partitioned Global Address Space (PGAS)
+
+::: info 什麼是 PGAS？
+**PGAS（Partitioned Global Address Space）** 是一種介於純 Shared Memory 和 Message Passing 之間的程式設計模型。在 PGAS 中：
+- 存在一個**全域位址空間**（程式設計師可見）
+- 但位址空間被**分割**到不同的處理器/節點
+- 程式設計師可以存取任何位址，但需要意識到**本地 vs 遠端**的差異
+:::
+
+#### PGAS 位址映射範例
+
+在多 Socket 伺服器中，PGAS 使用位址的高位元來識別資料所在的 Socket：
+
+| 位址範圍 | Socket |
+|----------|--------|
+| 0x0000_0000_0000_0000 - 0x0000_FFFF_FFFF_FFFF | Socket 0（本地） |
+| 0x0001_0000_0000_0000 - 0x0001_FFFF_FFFF_FFFF | Socket 1（遠端） |
+| 0x0002_0000_0000_0000 - 0x0002_FFFF_FFFF_FFFF | Socket 2（遠端） |
+
+#### PGAS 的優缺點
+
+| 優點 | 缺點 |
+|------|------|
+| 全域位址空間簡化程式設計 | 遠端存取延遲高 |
+| 可以明確優化本地存取 | 需要 NUMA-aware 程式設計 |
+| 結合兩種模型的優點 | 硬體實作較複雜 |
+
+#### PGAS 語言與實作
+
+| 語言/模型 | 說明 |
+|-----------|------|
+| **UPC** | Unified Parallel C |
+| **Co-array Fortran** | Fortran 2008 標準的一部分 |
+| **Chapel** | Cray 開發的平行語言 |
+| **X10** | IBM 研究的語言 |
 
 ### Message Passing 模型
 
@@ -74,20 +116,21 @@ NoC 並非獨立存在的元件，它必須與整個系統架構緊密配合。�
 
 ### 模型比較總結
 
-| 特性 | Shared Memory | Message Passing |
-|------|---------------|-----------------|
-| **Address Space** | 全域共享 | 分散式 |
-| **通訊方式** | 隱式（Load/Store） | 顯式（Send/Receive） |
-| **程式設計難度** | 較容易理解 | 需明確管理通訊 |
-| **硬體複雜度** | 需要 Cache Coherence | 相對簡單 |
-| **擴展性** | 受 Coherence 限制 | 較佳 |
-| **效能可預測性** | 較難預測 | 較容易預測 |
-| **常見 API** | OpenMP, Pthreads | MPI |
+| 特性 | Shared Memory | PGAS | Message Passing |
+|------|---------------|------|-----------------|
+| **Address Space** | 全域共享 | 分割的全域空間 | 分散式 |
+| **通訊方式** | 隱式（Load/Store） | 隱式但 NUMA-aware | 顯式（Send/Receive） |
+| **程式設計難度** | 較容易理解 | 中等 | 需明確管理通訊 |
+| **硬體複雜度** | 需要 Cache Coherence | 部分需要 | 相對簡單 |
+| **擴展性** | 受 Coherence 限制 | 較佳 | 最佳 |
+| **效能可預測性** | 較難預測 | 中等 | 較容易預測 |
+| **常見 API** | OpenMP, Pthreads | UPC, Chapel | MPI |
 
 ::: tip 混合方法
-在大規模平行處理架構中，混合使用兩種模型很常見：
+在大規模平行處理架構中，混合使用多種模型很常見：
 - **Node 內部**：使用 Shared Memory（OpenMP）
 - **Node 之間**：使用 Message Passing（MPI）
+- **PGAS 層**：提供統一的程式設計介面
 :::
 
 ## NoC 作為系統骨幹
@@ -115,7 +158,7 @@ NoC 需要支援：
 
 1. 了解 Shared Memory 系統對 NoC 的需求
 2. 理解 Cache Coherence Protocol 如何影響 NoC 設計
-3. 比較 Shared Memory 和 Message Passing 的差異
+3. 比較 Shared Memory、PGAS 和 Message Passing 的差異
 4. 認識常見的 NoC 介面標準（AMBA AXI、OCP 等）
 5. 理解 Protocol-level Deadlock 的成因和解決方案
 6. 分析不同 Cache 組態對網路流量的影響
@@ -127,7 +170,7 @@ NoC 需要支援：
 | **CMP** | Chip Multiprocessor，晶片多處理器 |
 | **SMP** | Symmetric Multiprocessor，對稱多處理器 |
 | **NUMA** | Non-Uniform Memory Access，非均勻記憶體存取 |
-| **PGAS** | Partitioned Global Address Space |
+| **PGAS** | Partitioned Global Address Space，分割的全域位址空間 |
 | **MSHR** | Miss Status Handling Register |
 | **TSHR** | Transaction Status Handling Register |
 | **Home Node** | 負責特定位址 Coherence 的節點 |

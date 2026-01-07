@@ -8,6 +8,27 @@
 
 Table 8.1 總結了本章介紹的各種 On-chip Network 案例研究的關鍵參數和設計選擇。
 
+## 記憶體架構總覽
+
+不同系統採用不同的記憶體架構，這直接影響 NoC 的設計需求：
+
+| Case Study | 記憶體架構 | Coherence Protocol | NoC 需求 |
+|------------|------------|-------------------|----------|
+| [Princeton Piton](./princeton-piton) | **Shared Memory** | MESI Directory | 支援 Coherence 流量 |
+| [Intel Xeon Phi](./intel-xeon-phi) | **Shared Memory** | MESIF Directory | 高頻寬、低延遲 |
+| [Oracle SPARC T5](./oracle-sparc-t5) | **Shared Memory** | MOESI Centralized | Crossbar 全連接 |
+| [Tilera TILEPRO64](./tilera) | **Hybrid** | MDN (Coherent) | 多網路分離 |
+| [Intel TeraFLOPS](./intel-teraflops) | **Message Passing** | 無 | 高頻寬點對點 |
+| [IBM Cell](./ibm-cell) | **Message Passing (DMA)** | 無 | 高頻寬 DMA |
+| [D.E. Shaw Anton 2](./anton2) | **Message Passing (DMA)** | 無 | 確定性延遲 |
+| [MIT Eyeriss](./mit-eyeriss) | **Dataflow** | 無 | Multicast 支援 |
+
+::: tip 記憶體架構影響
+- **Shared Memory**：需要 Cache Coherence 支援，NoC 必須處理多種 Message Class
+- **Message Passing**：不需要 Coherence，但需要高效的 DMA 傳輸
+- **Dataflow**：針對特定資料流模式優化，通常需要 Multicast 能力
+:::
+
 ## 案例分類
 
 ### 深度學習加速器

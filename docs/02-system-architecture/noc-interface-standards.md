@@ -70,6 +70,47 @@ AXI Protocol 中的每個 Transaction 在 Address Channel 上發送位址和控�
 
 許多最新版本的標準放寬了 Bus-based 語義的嚴格排序，以便可以插入 Point-to-Point 互連 Fabric（如 Crossbar 和 On-chip Network），同時保持對 Bus 的向後相容性。
 
+### 為什麼需要 Out-of-Order 支援？
+
+::: info 強制排序的問題
+在傳統 Bus 中，所有 Transaction 都按照**發出順序**完成。但在 NoC 中強制這種順序會造成嚴重問題：
+:::
+
+#### 問題 1：Head-of-Line (HOL) Blocking
+
+```
+假設 Master 發出：Req1 → Req2 → Req3
+
+傳統 Bus（強制排序）：
+  Req1 ──► Slow Slave（需要 100 cycles）
+  Req2 ──► Fast Slave（只需 10 cycles）──► 必須等 Req1！
+  Req3 ──► Fast Slave（只需 10 cycles）──► 必須等 Req2！
+
+總延遲：100 + 10 + 10 = 120 cycles
+
+NoC + Out-of-Order：
+  Req1 ──► Slow Slave（100 cycles）
+  Req2 ──► Fast Slave（10 cycles）──► 立即返回 ✓
+  Req3 ──► Fast Slave（10 cycles）──► 立即返回 ✓
+
+有效延遲：max(100, 10, 10) = 100 cycles（Req2, Req3 早就完成）
+```
+
+#### 問題 2：路徑長度差異
+
+在 NoC 中，不同目的地有不同的跳數：
+
+| Source → Dest | 跳數 | 基本延遲 |
+|---------------|------|----------|
+| Node(0,0) → Node(0,1) | 1 hop | ~5 cycles |
+| Node(0,0) → Node(3,3) | 6 hops | ~30 cycles |
+
+強制按順序返回意味著近的 Response 要等遠的，浪費大量時間。
+
+#### 問題 3：壅塞造成的延遲變異
+
+即使目的地相同，不同時間的網路壅塞狀況不同，強制排序會讓所有 Transaction 受限於最慢的那個。
+
 ### AXI Out-of-Order 支援
 
 **特點：**
@@ -82,8 +123,26 @@ AXI Protocol 中的每個 Transaction 在 Address Channel 上發送位址和控�
 
 ![Figure 2.11: AXI out-of-order transactions](/images/ch02/Figure%202.11.jpg)
 
-::: tip 為什麼需要 Out-of-Order 支援？
-在 On-chip Network 中，不同 Node 對之間發送的 Packet 可能以與發送順序不同的順序到達，這取決於 Node 之間的距離和實際的壅塞程度。在所有 Node 之間強制執行全域排序很難實現。因此，Out-of-Order 通訊標準對於 On-chip Network 部署是必要的。
+### Transaction ID 機制
+
+為了讓 Master 能夠識別 Out-of-Order 返回的 Response，AXI 使用 **Transaction ID**：
+
+```
+Master 發出：
+  Req(ID=1) → Slave A
+  Req(ID=2) → Slave B
+  Req(ID=3) → Slave A
+
+Response 可能以任意順序返回：
+  Resp(ID=2) ← Slave B 先完成
+  Resp(ID=1) ← Slave A 完成
+  Resp(ID=3) ← Slave A 完成
+
+Master 透過 ID 匹配 Request 和 Response
+```
+
+::: tip NoC 與 Out-of-Order
+在 On-chip Network 中，不同 Node 對之間發送的 Packet 可能以與發送順序不同的順序到達，這取決於 Node 之間的距離和實際的壅塞程度。在所有 Node 之間強制執行全域排序很難實現且效能損失大。因此，Out-of-Order 通訊標準對於 On-chip Network 部署是必要的。
 :::
 
 ## Coherence 支援
@@ -144,4 +203,3 @@ TileLink Conformance Levels：
 - On-Chip Networks Second Edition, Chapter 2.3
 - ARM AMBA AXI Protocol Specification
 - OCP-IP Specification
-

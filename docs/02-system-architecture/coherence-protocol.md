@@ -67,36 +67,83 @@ Cache Coherence Protocol 需要幾種類型的 Message：
 | **Multicast** | 單一 Source 到多個 Destination | Directory 發送 Invalidation 到多個 Sharer |
 | **Broadcast** | 單一 Source 到所有 Destination | Broadcast Protocol 的 Coherence Request |
 
-### Message 大小
+### Message 大小與 Bimodal Distribution
 
 Cache Coherent Shared Memory CMP 通常需要**兩種 Message 大小**：
 
 1. **控制 Message**：Coherence Request 和不帶資料的 Response
    - 包含記憶體位址和 Coherence 命令
-   - **小型**（通常 < 16 bytes）
+   - **小型**（通常 8-16 bytes）
 
 2. **資料 Message**：完整的 Cache Line 傳輸
    - 包含整個 Cache Block（通常 **64 bytes**）和記憶體位址
-   - **大型**
+   - **大型**（72+ bytes）
 
-::: tip Bimodal Distribution
-Cache Coherent On-chip Network 的 Traffic 特徵是 Bimodal 分佈：短的控制 Message 和長的資料 Message。針對不同 Message 大小的處理可以改善效能和能源效率。
+::: info Bimodal Traffic Distribution
+Cache Coherent On-chip Network 的流量呈現 **Bimodal（雙峰）分佈**：
+
+```
+頻率
+  │    ▄▄▄
+  │    █ █                      ▄▄▄
+  │    █ █                      █ █
+  │    █ █                      █ █
+  │    █ █                      █ █
+  └────█─█──────────────────────█─█────► Message 大小
+      8-16B                    72+B
+      (控制)                   (資料)
+```
+
+**為何呈雙峰分佈？**
+- **控制 Message** 頻繁但小：每次 Cache Miss 都需要 Request，每次寫入都可能觸發 Invalidation
+- **資料 Message** 較少但大：只有實際的資料傳輸才攜帶完整 Cache Line
+
+**對 NoC 設計的影響：**
+| 設計考量 | 影響 |
+|----------|------|
+| **Buffer 大小** | 需要同時容納大小差異大的封包 |
+| **Virtual Channel** | 可考慮為不同大小的 Message 分配不同 VC |
+| **頻寬分配** | 資料 Message 佔用大部分頻寬 |
+| **延遲優化** | 控制 Message 通常更延遲敏感 |
 :::
 
-### Message Class
+### Message Class 與 Virtual Channel 分離
 
-Protocol 可能需要幾個不同的 Message Class。每個 Class 包含一組彼此獨立的 Coherence 動作：
+Protocol 可能需要幾個不同的 **Message Class**。每個 Class 包含一組彼此獨立的 Coherence 動作：
 
-| Message Class | 說明 | 範例 |
-|---------------|------|------|
-| **Request** | 發起 Coherence 交易 | Load、Store、Upgrade、Writeback |
-| **Intervention** | Directory 請求傳輸修改的資料 | Fwd-GetS、Fwd-GetM |
-| **Response** | 回應請求或 Intervention | Invalidation Ack、Negative Ack、Data |
+| Message Class | 說明 | 方向 | 範例 |
+|---------------|------|------|------|
+| **Request** | 發起 Coherence 交易 | Requestor → Home | GetS, GetM, PutM |
+| **Intervention** | Home 請求其他 Node 協助 | Home → Sharer | Fwd-GetS, Fwd-GetM, Invalidate |
+| **Response** | 回應請求或 Intervention | Sharer → Requestor 或 Home | Data, Ack, Nack |
 
-## Protocol-Level Deadlock
+::: warning 為何需要分離 Message Class？
+這三種 Message Class 必須使用**不同的 Virtual Channel**，原因是它們之間存在**依賴關係**：
+
+```
+Request 發出                Response 返回
+    │                           ▲
+    ▼                           │
+┌───────┐                   ┌───────┐
+│ Home  │ ──Intervention──► │Sharer │
+│ Node  │                   │       │
+└───────┘                   └───────┘
+```
+
+**依賴鏈**：Request → Intervention → Response
+
+如果這三種 Message 共用同一個 VC：
+1. Request 填滿 VC
+2. Intervention 無法發送（被 Request 阻擋）
+3. Response 無法產生（沒收到 Intervention）
+4. Request 無法完成（等待 Response）
+5. **Deadlock！**
+:::
+
+## Protocol-level Deadlock
 
 ::: danger 重要
-除了 Message 類型和大小之外，Shared Memory 系統要求網路**免於 Protocol-Level Deadlock**。
+除了 Message 類型和大小之外，Shared Memory 系統要求網路**免於 Protocol-level Deadlock**。
 :::
 
 ### Deadlock 成因
@@ -112,14 +159,51 @@ Protocol 可能需要幾個不同的 Message Class。每個 Class 包含一組�
 
 ### 解決方案：Virtual Channel 分離
 
-**Alpha 21364** 為每個 Message Class 分配一個 Virtual Channel 來防止 Protocol-Level Deadlock。
+**Alpha 21364** 為每個 Message Class 分配一個 Virtual Channel 來防止 Protocol-level Deadlock。
 
 透過要求不同 Message Class 使用不同 Virtual Channel，Request 和 Response 之間的 Cyclic Dependence 在網路中被打破：
 - VC0: Request Messages
 - VC1: Intervention Messages
 - VC2: Response Messages
 
-Virtual Channel 和處理 Protocol-Level Deadlock 與 Network Deadlock 的技術在 Chapter 5 中討論。
+#### VC 如何打破 Cyclic Dependency
+
+考慮以下 Deadlock 情境和 VC 如何解決它：
+
+**沒有 VC 分離的情況：**
+```
+Node A                    Node B
+  │ Request ────────────────►│
+  │                          │
+  │◄──────────── Request ────│
+  │                          │
+  │ (等待 Response)    (等待 Response)
+  │                          │
+  └─────── DEADLOCK! ────────┘
+
+Buffer 已滿，Response 無法發送
+```
+
+**有 VC 分離的情況：**
+```
+VC0 (Request):   A ──Req──► B ──Req──► A  (可能滿)
+VC1 (Interv.):   獨立空間，不受 Request 影響
+VC2 (Response):  獨立空間，不受 Request 影響
+
+即使 VC0 滿了：
+- B 可以在 VC2 發送 Response 給 A
+- A 收到 Response，釋放資源
+- Deadlock 被避免！
+```
+
+::: tip VC 分離的關鍵
+VC 分離之所以有效，是因為：
+1. **資源隔離**：不同 Class 的 Message 不會競爭同一 Buffer
+2. **依賴打破**：Response 永遠不會被 Request 阻擋
+3. **進度保證**：每個 Class 都有獨立的前進通道
+:::
+
+Virtual Channel 和處理 Protocol-level Deadlock 與 Network Deadlock 的技術在 [Chapter 5](/05-flow-control/) 中討論。
 
 ## Network Interface 設計
 
@@ -146,4 +230,3 @@ Virtual Channel 和處理 Protocol-Level Deadlock 與 Network Deadlock 的技術
 ## 參考資料
 
 - On-Chip Networks Second Edition, Chapter 2.1.1, 2.1.2, 2.1.3
-

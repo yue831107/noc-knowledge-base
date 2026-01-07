@@ -74,14 +74,84 @@ Process B: Send(A, msg)    // 等待 A 的 Receive
 
 除了 Cache Coherent CMP 中 On-chip Network 的出現，Tiled Microprocessor 也利用 On-chip Network 進行 **Scalar Operand Network**。
 
-**Operand Network 的工作方式：**
-1. 這些設計將功能單元分佈在多個 Tile 上
-2. 緩解大型超純量架構中存在的 Wire Delay 問題
-3. 指令被排程到可用的 Tile
-4. 使用 Operand Network 在產生指令和消費指令的 Tile 之間通訊 Register 值
-5. 指令的結果被傳達給 Consumer Tile，然後 Consumer Tile 可以喚醒並執行等待新資料的指令
+### 什麼是 Operand Network？
 
-範例架構：TRIPS、RAW、Wavescalar
+::: info Operand Network 的概念
+**Operand Network** 是一種專門用於在分散式功能單元之間傳遞**運算元（Operand）和運算結果**的網路。它出現在「Tiled」或「Distributed」微架構中，這類架構將傳統集中式處理器的功能單元分散到多個 Tile 上。
+:::
+
+### 為何需要 Operand Network？
+
+傳統超純量處理器面臨的問題：
+
+```
+傳統集中式設計：
+┌─────────────────────────────────────────────┐
+│              Register File                   │
+│  ┌───┬───┬───┬───┬───┬───┬───┬───┐         │
+│  │R0 │R1 │R2 │R3 │R4 │R5 │R6 │R7 │ ...     │
+│  └─┬─┴─┬─┴─┬─┴─┬─┴─┬─┴─┬─┴─┬─┴─┬─┘         │
+│    │   │   │   │   │   │   │               │
+│    ▼   ▼   ▼   ▼   ▼   ▼   ▼               │
+│  ┌───┬───┬───┬───┬───┬───┬───┐              │
+│  │ALU│ALU│MUL│DIV│FPU│FPU│LD │              │
+│  └───┴───┴───┴───┴───┴───┴───┘              │
+└─────────────────────────────────────────────┘
+問題：所有功能單元到 Register File 的連線
+     → 長線延遲、高功耗、佈線壅塞
+```
+
+### Tiled 架構與 Operand Network
+
+```
+Tiled/Distributed 設計：
+┌──────────┐    ┌──────────┐    ┌──────────┐
+│  Tile 0  │────│  Tile 1  │────│  Tile 2  │
+│ ┌──────┐ │    │ ┌──────┐ │    │ ┌──────┐ │
+│ │ ALU  │ │    │ │ MUL  │ │    │ │ FPU  │ │
+│ │ RF   │ │    │ │ RF   │ │    │ │ RF   │ │
+│ └──────┘ │    │ └──────┘ │    │ └──────┘ │
+└────┬─────┘    └────┬─────┘    └────┬─────┘
+     │               │               │
+     └───────────────┴───────────────┘
+              Operand Network
+```
+
+### Operand Network 的工作方式
+
+1. **指令排程**：指令被排程到有可用功能單元的 Tile
+2. **Operand 傳遞**：如果 Operand 在其他 Tile，透過 Operand Network 傳送
+3. **結果傳遞**：運算結果透過 Operand Network 傳送給 Consumer 指令所在的 Tile
+4. **指令喚醒**：Consumer Tile 收到結果後，喚醒等待該結果的指令
+
+### 範例：TRIPS 架構
+
+**TRIPS（Tera-op Reliable Intelligently adaptive Processing System）** 是 Operand Network 的代表性實作：
+
+| 特性 | 規格 |
+|------|------|
+| **Tile 數量** | 4×4 = 16 個 Execution Tile |
+| **Operand Network** | 專用的低延遲網路 |
+| **指令模型** | Explicit Data Graph Execution (EDGE) |
+| **目標** | 減少線延遲、提高 ILP |
+
+### Operand Network vs Cache Network
+
+| 面向 | Operand Network | Cache Network |
+|------|-----------------|---------------|
+| **傳輸內容** | 64-bit 運算元 | 64-byte Cache Line |
+| **延遲需求** | 極低（<5 cycles） | 中等（可容忍 10+ cycles） |
+| **頻寬需求** | 高（每 cycle 多個運算元） | 中等 |
+| **Packet 大小** | 小（64-128 bits） | 大（512+ bits） |
+| **Traffic 模式** | Producer-Consumer | Request-Response |
+
+### 其他使用 Operand Network 的架構
+
+| 架構 | 開發者 | 特點 |
+|------|--------|------|
+| **TRIPS** | UT Austin | EDGE 執行模型 |
+| **RAW** | MIT | 可重配置 Tile |
+| **WaveScalar** | U. Washington | Dataflow 執行 |
 
 ## 對 NoC 的需求
 
@@ -97,9 +167,8 @@ Process B: Send(A, msg)    // 等待 A 的 Receive
 
 - **MPI（Message Passing Interface）**：高效能運算中最常用的 Message Passing 標準
 - **Intel SCC**：使用顯式 Messaging Passing 進行 DMA 到本地記憶體，放棄 On-chip Cache Coherence
-- **IBM Cell**：採用 Message Passing 架構
+- **IBM Cell**：採用 Message Passing 架構，詳見 [Case Studies](/08-case-studies/ibm-cell)
 
 ## 參考資料
 
 - On-Chip Networks Second Edition, Chapter 2.2
-

@@ -17,6 +17,39 @@
 
 Figure 8.13 展示了 Cell 的整體架構，包含 PPE、8 個 SPE 和 EIB 互連。
 
+## 記憶體架構：Message Passing (DMA)
+
+::: info 記憶體模型
+Cell 採用 **Message Passing** 架構，透過 **DMA（Direct Memory Access）** 進行明確的資料移動。這與傳統的 Shared Memory CMP 截然不同——沒有硬體 Cache Coherence Protocol。
+:::
+
+Cell 是**異構**處理器，PPE 和 SPE 使用完全不同的記憶體模型：
+
+| | PPE | SPE |
+|---|---|---|
+| **角色** | 主控制器（執行 OS） | 運算加速器（資料平行） |
+| **記憶體存取** | 傳統 Cache 階層 | Local Store + DMA |
+| **Cache** | L1 (64KB) + L2 (512KB) | **無** |
+| **資料管理** | 硬體自動（透明） | 軟體手動（DMA） |
+
+### 為何 PPE 有 Cache 而 SPE 沒有？
+
+這是**刻意的設計選擇**，而非矛盾：
+
+**PPE（傳統模型）**：
+- 執行作業系統和控制流程
+- 需要處理不可預測的記憶體存取模式
+- Cache 提供透明的存取加速
+
+**SPE（Scratchpad 模型）**：
+- 執行資料平行的運算密集任務
+- 存取模式通常可預測
+- **Local Store 優勢**：延遲固定、可預測；不需要 Cache Tag 硬體開銷；軟體可精確控制資料放置
+
+::: warning 程式設計複雜度
+SPE 的 Local Store 需要程式設計師手動管理 DMA，這是 Cell 最大的挑戰之一。現代 GPU 也採用類似的明確記憶體管理模型。
+:::
+
 ## 異構架構
 
 Cell 是最早的**商用異構多核**處理器之一。

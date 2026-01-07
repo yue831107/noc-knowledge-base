@@ -16,6 +16,40 @@
 
 Figure 8.5 展示了 Anton 2 系統架構和 ASIC 間的互連網路。
 
+## 記憶體架構：Message Passing (DMA)
+
+::: info 記憶體模型
+Anton 2 採用 **Message Passing** 架構，透過 **DMA（Direct Memory Access）** 進行明確的資料移動。作為專用加速器，它沒有通用處理器的 Cache Coherence 需求——每個 ASIC 管理自己的本地記憶體，資料透過顯式 DMA 傳輸在節點間移動。
+:::
+
+### 為何選擇 Message Passing
+
+作為分子動力學專用機器，Anton 2 的記憶體架構設計基於以下考量：
+
+| 考量 | 選擇 | 原因 |
+|------|------|------|
+| **資料分布** | 空間分解 | 每個 ASIC 負責模擬空間的一部分 |
+| **通訊模式** | 可預測 | MD 演算法的通訊模式固定 |
+| **資料移動** | DMA 傳輸 | 軟體完全控制，最大化效率 |
+| **同步需求** | 明確同步 | 時間步之間需要 Barrier |
+
+### 與 Shared Memory 的對比
+
+| 特性 | Anton 2 (Message Passing) | Shared Memory CMP |
+|------|---------------------------|-------------------|
+| **位址空間** | 分散式（每 ASIC 獨立） | 全域共享 |
+| **資料移動** | 顯式 DMA | 隱式（Cache Protocol） |
+| **Cache Coherence** | **不需要** | 需要硬體支援 |
+| **程式設計模型** | 空間分解 + 訊息傳遞 | Load/Store |
+| **效能可預測性** | 高（確定性） | 較低（依 Cache 行為） |
+
+::: tip 設計權衡
+Anton 2 放棄了 Shared Memory 的程式設計便利性，換取：
+- **確定性延遲**：DMA 傳輸時間可精確預測
+- **無 Coherence 開銷**：不需要處理 Invalidation/Intervention
+- **高效頻寬利用**：資料傳輸完全由應用控制
+:::
+
 ## 網路架構
 
 Anton 2 使用**多層次**的網路設計，從晶片內到系統級別。
@@ -175,4 +209,3 @@ Anton 系列已經：
 
 - On-Chip Networks Second Edition, Chapter 8.4
 - D.E. Shaw et al., "Anton 2: Raising the Bar for Performance and Programmability in a Special-Purpose Molecular Dynamics Supercomputer," SC 2014
-
