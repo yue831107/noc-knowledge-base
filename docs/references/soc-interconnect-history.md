@@ -141,14 +141,8 @@ NoC 的關鍵洞察：**透過 Packetization 減少導線數量**。
 
 | 部分 | 架構 | 說明 |
 |------|------|------|
-| **(a) Single Processor** | 單一 CPU + L1 + L2 | 單處理器系統，不存在多核心 Cache 一致性問題 |
-| **(b) 4-Core Cluster** | 4 個 CPU + 各自 L1 + 共享 L2 | 四核心 Cluster，**Cluster 內部已有 Coherence 機制**保證 4 個 CPU 之間的 Cache 一致性 |
-
-::: tip 為何 Cluster 可以連接 Non-coherent NoC？
-關鍵在於 **Cluster 內部已經保證了 Cache 一致性**。只有當 CPU Cluster 需要與**外部其他 IP**（如第二個 CPU Cluster、I/O Coherent Interface、Accelerator）維護 Cache Coherence 時，才需要 Coherent NoC。
-
-如果 Cluster 只需要存取 Memory 或其他不需要 Coherence 的 IP，則可以使用 Non-coherent NoC。
-:::
+| **(a) Single Processor** | 單一 CPU + L1 + L2 | 單處理器系統，不存在多核心 Cache 一致性問題，可直接使用 Non-coherent NoC |
+| **(b) 4-Core Cluster** | 4 個 CPU + 各自 L1 + 共享 L2 | Cluster 內部已有 Coherence 機制保證 4 個 CPU 之間的一致性，因此對外可使用 Non-coherent NoC；若需與其他 Cluster 或 Accelerator 共享資料，則需改用 Coherent NoC |
 
 #### 定義與運作方式
 
