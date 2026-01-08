@@ -26,12 +26,29 @@
 
 ### 硬體架構分類
 
-| 硬體架構 | 全稱 | 特點 |
-|----------|------|------|
-| **SMP** | Symmetric Multiprocessor | 多處理器共享記憶體，對稱存取 |
-| **CMP** | Chip Multiprocessor | 多核心整合於單一晶片，通常有硬體 Cache Coherence |
-| **MPSoC** | Multiprocessor System-on-Chip | 異構處理器整合，可能混合多種記憶體模型 |
-| **Cluster** | 叢集系統 | 多節點透過網路連接，Node 間通常無硬體 Coherence |
+| 硬體架構 | 全稱 | 互連方式 | 特點 |
+|----------|------|----------|------|
+| **SMP** | Symmetric Multiprocessor | **Shared Bus** | 傳統多處理器，多 CPU 共享同一 Bus |
+| **CMP** | Chip Multiprocessor | Bus → Crossbar → **NoC** | 多核心整合於單一晶片，核心數增加時演進到 NoC |
+| **MPSoC** | Multiprocessor System-on-Chip | **NoC** | 異構處理器整合，通常使用 NoC |
+| **Cluster** | 叢集系統 | 網路（Ethernet/InfiniBand） | 多節點透過外部網路連接 |
+
+::: info SMP 與 NoC 的關係
+**SMP 是 Bus 時代的產物**，並非使用 NoC。正是因為 SMP 的 Shared Bus 架構無法擴展到大量處理器（通常限制在 2-8 個），才促使了 CMP 和 NoC 的發展。
+
+```
+SMP (Shared Bus)           CMP (NoC)
+    ┌───┐ ┌───┐               ┌───┐───┌───┐
+    │CPU│ │CPU│               │CPU│   │CPU│
+    └─┬─┘ └─┬─┘               └─┬─┘   └─┬─┘
+      │     │                   │       │
+══════╪═════╪══════ Bus      ───┴───────┴─── NoC
+      │     │                   │       │
+    ┌─┴─────┴─┐               ┌─┴─┐   ┌─┴─┐
+    │   MEM   │               │CPU│───│CPU│
+    └─────────┘               └───┘   └───┘
+```
+:::
 
 ### 程式設計模型分類
 
@@ -43,12 +60,12 @@
 
 ### 硬體與程式設計模型的對應關係
 
-| 硬體架構 | 常見程式設計模型 | 說明 |
-|----------|------------------|------|
-| **SMP** | Shared Memory | 硬體提供統一記憶體存取，自然支援 Shared Memory 模型 |
-| **CMP** | Shared Memory | Chip 內有硬體 Coherence，但也可運行 MPI 等 Message Passing 程式 |
-| **MPSoC** | 混合 | 異構處理器可能各自使用不同模型 |
-| **Cluster** | Message Passing 或混合 | Node 間使用 MPI，Node 內可使用 OpenMP（Hybrid Model） |
+| 硬體架構 | 互連 | 常見程式設計模型 | 說明 |
+|----------|------|------------------|------|
+| **SMP** | Bus | Shared Memory | 透過 Shared Bus 提供統一記憶體存取 |
+| **CMP** | NoC | Shared Memory | Chip 內有硬體 Coherence，也可運行 MPI |
+| **MPSoC** | NoC | 混合 | 異構處理器可能各自使用不同模型 |
+| **Cluster** | 網路 | Message Passing 或混合 | Node 間 MPI，Node 內 OpenMP |
 
 ::: tip 混合程式設計模型（Hybrid Model）
 在大規模系統中，混合使用多種模型是常見做法：
