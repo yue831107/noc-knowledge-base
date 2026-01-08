@@ -137,7 +137,14 @@ NoC 的關鍵洞察：**透過 Packetization 減少導線數量**。
 
 ![Figure 6: Non-coherent NoC deployments](/arteris/6.jpg)
 
-**Figure 6** 展示了 Non-coherent NoC 的典型部署。
+**Figure 6** 展示了 Non-coherent NoC 的典型部署：
+
+| 部分 | 架構 | 說明 |
+|------|------|------|
+| **(a) Single Processor** | 單一 CPU + L1 + L2 | 單處理器系統，CPU 透過私有 L1/L2 Cache 連接到 Non-coherent NoC |
+| **(b) 4-Core Cluster** | 4 個 CPU + 各自 L1 + 共享 L2 | 四核心 Cluster，每個 CPU 有私有 L1 Cache，共享 L2 Cache，整體連接到 Non-coherent NoC |
+
+在這兩種配置中，Cache 一致性由**軟體**或**單一 Cluster 內部**處理，不需要跨 NoC 的硬體 Coherence Protocol。
 
 #### 定義與運作方式
 
