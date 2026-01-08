@@ -131,22 +131,34 @@ NoC 的關鍵洞察：**透過 Packetization 減少導線數量**。
 
 ## Coherent vs Non-coherent NoC
 
-現代 SoC 通常需要**兩種 NoC**：Coherent NoC 用於需要資料一致性的處理器，Non-coherent NoC 用於其他 IP。
+現代 SoC 可以包含 **Non-coherent 和 Coherent NoC 的混合**。Coherent NoC 主要管理有 Cache 的 CPU，而 Non-coherent NoC 處理 SoC 中其餘的互連。
 
 ### Non-coherent NoC（FlexNoC）
 
 ![Figure 6: Non-coherent NoC deployments](/arteris/6.jpg)
 
-**Figure 6** 展示了 Non-coherent NoC 的典型部署：
+**Figure 6** 展示了 Non-coherent NoC 的典型部署。
 
-根據 [Arteris Cache Coherent Interconnect 說明](https://www.arteris.com/learn/cache-coherent-interconnect/)：
+#### 定義與運作方式
 
-> "Non-coherent NoC interconnects do not implement cache coherence protocols across the SoC. Each processor or core manages its local cache independently."
+Non-coherent NoC **不在 SoC 中實現 Cache Coherence Protocol**。每個處理器或核心獨立管理自己的 Local Cache，不保證資料修改對系統中其他部分可見。當需要資料一致性時，依賴**軟體機制**來處理。這種方式雖然可能效率較低，但比硬體 Coherence 機制**更簡單、更省電**。
 
-**適用場景：**
-- NPU、Video Codec 等加速器
-- PCIe、USB 等周邊 I/O
-- 不需要 CPU 共享資料的 IP
+#### 核心價值
+
+Non-coherent NoC 是一種先進的互連 IP 解決方案，透過解決以下挑戰來優化 SoC 開發：
+
+- **Performance（效能）**
+- **Power Efficiency（功耗效率）**
+- **Area Minimization（面積最小化）**
+
+#### 設計特點
+
+| 特點 | 說明 |
+|------|------|
+| **設計彈性** | 可客製化以適應各種 SoC 架構，從單核心到複雜系統 |
+| **低延遲** | 不承擔 Cache Coherence 開銷，對需要極低延遲回應的應用特別有益 |
+| **設計簡化** | 比 Cache-coherent 互連更為直接 |
+| **主要職責** | 處理 SoC 中除了 Cached CPU 以外的互連 |
 
 ### Coherent NoC（Ncore）
 
@@ -154,83 +166,78 @@ NoC 的關鍵洞察：**透過 Packetization 減少導線數量**。
 
 **Figure 5** 展示了 Coherent NoC 的典型部署：多個 CPU Cluster 透過 Coherent NoC（含 L3 Cache）互連。
 
-::: warning Coherent NoC 的核心價值
-根據 [Arteris Ncore 說明](https://www.arteris.com/products/coherent-noc-ip/ncore/)：
+#### 核心功能：資料共享
 
-> "The ability to share data coherently allows the appropriate computational element to access data more quickly, improving performance and reducing power consumption."
+Cache Coherent 互連實現 **CPU、GPU 和 Accelerator 之間的無縫通訊和資料共享**，確保系統中對 Shared Memory 的**統一視圖（Unified View）**。透過在硬體中維護多個處理器間的一致性，Coherent NoC 能夠**提升效率**並**簡化軟體開發**。
 
-**關鍵特性：**
-- 支援 **CPU、GPU、加速器之間的資料共享**
-- 實現 **Distributed Cache Coherence**
-- 使用 **Directory-based Protocol** 追蹤 Cache 狀態
-:::
+#### Distributed Cache Coherence
 
-### Coherent NoC 技術細節
+Coherent NoC 專為先進 SoC 架構設計，支援 **Distributed Cache Coherence** 等特性，使其成為 **AI、Data Centers、HPC** 等高效能低延遲應用的理想選擇。
 
-根據 [NVIDIA 開發者部落格的 Arteris 白皮書](https://developer-blogs.nvidia.com/wp-content/uploads/2019/12/arteris-ncore-white-paper.pdf)：
+#### 何時需要 Coherent NoC？
+
+在多個 IP 需要維護 Shared Memory 一致性的系統中，Coherent NoC 是必要的。具體情況包括 CPU Cluster 需要與以下 IP 維護 Cache Coherence：
+
+- 第二個 CPU Cluster
+- I/O Coherent Interface
+- Accelerator
+
+#### Ncore：分散式異構架構
+
+Ncore IP 是一個 **Distributed Heterogeneous Cache Coherent Interconnect（分散式異構快取一致性互連）**。與固定或 Hub-based Cache Controller 不同，Ncore 是分散式解決方案，由複製的單元和核心元件組成，具有以下優勢：
 
 | 特性 | 說明 |
 |------|------|
-| **Protocol 支援** | AMBA CHI、ACE（AXI Coherency Extensions） |
-| **Cache Protocol** | MOESI（Modified, Owned, Exclusive, Shared, Invalid） |
-| **Coherence 機制** | Directory-based + Snoop-based |
-| **Snoop Filter** | 可配置的 Directory，追蹤系統中所有 Cache 狀態 |
-| **Proxy Cache** | 讓 Non-coherent Agent 也能存取 Coherent Subsystem |
+| **Configurable Snoop Filters** | 多個可配置的 Snoop Filter，追蹤 Cache 狀態 |
+| **Embedded Caches** | 嵌入式快取 |
+| **Scalability** | 可擴展以適應各種處理需求 |
+| **Flexibility** | 比固定或集中式架構更大的彈性 |
 
-### 為何需要 Distributed Cache Coherence？
+分散式架構也能簡化 **Power Management**、**Physical Implementation** 和 **Timing Closure**。
 
-傳統的集中式 Coherence（如 Snoop Bus）無法擴展到大量處理器。Ncore 採用 **Distributed Heterogeneous Cache Coherent Interconnect**：
+#### Protocol 支援
 
-| 集中式 Coherence | 分散式 Coherence（Ncore） |
-|------------------|---------------------------|
-| 單一 Snoop Bus | 多個可配置的 Snoop Filter |
-| Scalability 差 | 支援最多 64 個 Fully-coherent Agent |
-| 固定架構 | 可配置的 Embedded Cache |
+| Interface 類型 | Protocol | 說明 |
+|----------------|----------|------|
+| **Fully Coherent** | CHI-E, CHI-B, ACE | 完全一致性 Agent |
+| **I/O Coherent** | ACE-Lite | I/O 一致性 Agent |
+| **Non-coherent** | AXI | 無一致性需求的子系統或裝置 |
+
+#### Proxy Cache
+
+Ncore IP 包含**可配置的 Proxy Cache**，提升 Non-coherent Agent 存取 Coherent Subsystem 的效能，讓非快取 IP 也能獲得系統級 Coherency 的好處。
 
 ### 混合架構：Coherent + Non-coherent
 
 ![Figure 7: Mixture of coherent and non-coherent NoCs](/arteris/7.jpg)
 
-**Figure 7** 展示了現代 SoC 的典型架構：
+**Figure 7** 展示了現代 SoC 中 Coherent 和 Non-coherent NoC 的混合架構。
 
-根據 [Arteris 說明](https://www.arteris.com/learn/cache-coherent-interconnect/)：
+基於 Ncore 互連的系統可以在邏輯上劃分為 **Coherent Subsystem** 和 **Non-coherent Subsystem**。現代 SoC 設計結合兩種 NoC 互連，以利用每種方法的優勢。透過謹慎選擇實現方式，設計者可以創建提供**最佳 Performance、Power Efficiency 和 Scalability 平衡**的 SoC。
 
-> "A system based on the Ncore interconnect can be logically divided into a coherent subsystem and a non-coherent subsystem."
+#### Coherent vs Non-coherent 比較
 
-| 區域 | NoC 類型 | 連接的 IP |
-|------|----------|-----------|
-| **Coherent Subsystem** | Ncore | CPU Cluster、GPU（I/O-coherent）、Memory Controller |
-| **Non-coherent Subsystem** | FlexNoC | NPU、Video、PCIe、周邊 |
-| **Bridge** | - | 連接兩個 Subsystem |
-
-**實際案例**：Toshiba Visconti 5 採用 8 個 NoC Instance，分為 Safety Island 和 Processing Island，使用 Ncore（Coherent）和 FlexNoC（Non-coherent）的組合。
+| 面向 | Coherent NoC | Non-coherent NoC |
+|------|--------------|------------------|
+| **主要職責** | 管理 Cached CPU | 處理 SoC 其餘互連 |
+| **核心功能** | CPU/GPU/Accelerator 資料共享 | 效能、功耗、面積優化 |
+| **Cache Coherence** | 硬體實現 | 軟體處理 |
+| **軟體開發** | 簡化（硬體維護一致性） | 需自行處理一致性 |
+| **功耗** | 較高（Coherence 開銷） | 較低 |
+| **延遲** | - | 更低（無 Coherence 開銷） |
+| **適用場景** | AI、HPC、資料中心 | 各種 SoC 架構 |
 
 ## 現代高階 SoC 架構
 
 ![Figure 8: Modern high-end SoC example](/arteris/8.jpg)
 
-**Figure 8** 展示了現代高階 SoC 的典型架構：
-
-| 區域 | 互連 | 說明 |
-|------|------|------|
-| **CPU Cluster** | Coherent NoC | 多個 Processor Cluster，支援 Cache Coherence |
-| **NPU** | Non-coherent NoC | 大量 Processing Element 組成陣列 |
-| **其他 IP** | Non-coherent NoC | 周邊和專用加速器 |
+**Figure 8** 展示了現代高階 SoC 的典型架構，包含 Coherent 和 Non-coherent NoC 的混合部署。
 
 ## NoC Topology
 
 ![Figure 10: Common NoC Topologies](/arteris/10.jpg)
 
-**Figure 10** 展示了常見的 NoC Topology：
-
-| Topology | 特點 | 適用場景 |
-|----------|------|----------|
-| **(a) Crossbar** | 全連接、低 Latency | 小規模（< 8 節點） |
-| **(b) Star** | 中央集中 | 周邊互連 |
-| **(c) Ring** | 簡單、Latency 隨規模增長 | 中小規模 |
-| **(d) Tree** | 階層式 | 階層式記憶體 |
-| **(e) Mesh** | 規則、可擴展 | 大規模 CMP |
-| **(f) Torus** | Mesh + Wraparound | 高效能運算 |
+**Figure 10** 展示了常見的 NoC Topology。
 
 ::: tip 對應章節
 關於 Topology 的詳細分析，請參考 [Topology 章節](/03-topology/)。
@@ -240,38 +247,30 @@ NoC 的關鍵洞察：**透過 Packetization 減少導線數量**。
 
 ![Figure 9: PU arrays using NoC-based soft tiling](/arteris/9.jpg)
 
-**Figure 9** 展示了現代 NoC IP 的自動化能力：
-
-1. **定義 Processing Unit（PU）**
-2. **Auto-replicate PUs**：自動複製成陣列
-3. **Auto-generate NoC**：自動生成 Coherent 或 Non-coherent NoC
-4. **Auto-configure NIUs**：自動配置 Network Interface Unit
+**Figure 9** 展示了現代 NoC IP 的自動化能力，支援 Processing Unit 陣列的自動生成和配置。
 
 ## 關鍵要點總結
 
 ### 演進驅動力
 
-```
-Bus: Arbitration Bottleneck
-         │
-         ▼
-Crossbar: Timing Closure、面積、功耗問題
-         │
-         ▼
-NoC: Packetization 解決佈線問題
-         │
-         ▼
-Coherent NoC: 支援 CPU/GPU 資料共享
-```
+根據 Arteris 技術文件，SoC 互連的演進驅動力：
 
-### Coherent vs Non-coherent 選擇
+| 時代 | 技術 | 驅動演進的問題 |
+|------|------|----------------|
+| **第一代** | Bus | Arbitration Bottleneck |
+| **第二代** | Crossbar | Timing Closure、面積、功耗問題 |
+| **第三代** | NoC | 透過 Packetization 解決佈線問題 |
+| **第四代** | Coherent + Non-coherent NoC | 支援 CPU/GPU/Accelerator 資料共享 |
 
-| 需求 | 選擇 | 原因 |
-|------|------|------|
-| CPU 之間資料共享 | Coherent NoC | 需要硬體維護 Cache 一致性 |
-| CPU 與 GPU 共享資料 | Coherent NoC（I/O-coherent） | 減少資料複製，降低功耗 |
-| 加速器、周邊 | Non-coherent NoC | 不需要 Coherence 的開銷 |
-| 大型 SoC | 混合架構 | Coherent 區域 + Non-coherent 區域 |
+### 何時選擇 Coherent vs Non-coherent？
+
+根據原文描述：
+
+**選擇 Coherent NoC 的情況：**
+> "If the CPU cluster is required to maintain cache coherence with other IPs, for example, a second CPU cluster, an I/O coherent interface, or accelerator, then a coherent NoC will be employed."
+
+**選擇 Non-coherent NoC 的情況：**
+> "Coherent NoCs will primarily manage cached CPUs, while non-coherent NoCs will handle the rest of the SoC interconnect."
 
 ### 與教科書的對應
 
